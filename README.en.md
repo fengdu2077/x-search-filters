@@ -102,15 +102,13 @@ After editing files, reload the extension:
 3. Click the reload button on the extension card.
 4. Refresh the X tab.
 
-## FAQ
+## Project notes
 
-### Why not publish on the Chrome Web Store yet?
-
-The project can be distributed through GitHub first. Users can install it with Chrome Developer Mode before a Chrome Web Store release is available.
-
-### Why does the Advanced button sometimes disappear after X changes?
-
-This extension depends on X's search-box DOM. X may change its page structure at any time, which can break detection. If this happens, please open an issue with a screenshot or the search-box DOM details from the browser console.
+- This project is currently in a trial and iteration stage, and is not published on the Chrome Web Store yet.
+- It is distributed through GitHub for now. Users can install it with Chrome Developer Mode as an unpacked extension.
+- I have not registered a Google Chrome Web Store developer account yet. If more people use this extension, I will consider publishing it on the Chrome Web Store.
+- This extension depends on the search-box DOM on X. If X changes its page structure, button detection or some interactions may break.
+- If you run into issues, please open an issue. Pull requests / merge requests are also welcome.
 
 ## Disclaimer
 

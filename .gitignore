@@ -1,0 +1,18 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local archives / builds
+*.zip
+*.crx
+*.pem
+
+# Temporary files
+.tmp/
+tmp/

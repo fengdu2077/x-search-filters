@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.7
+
+- Redesign the extension icon (16 / 48 / 128).
+- Re-scan on any DOM mutation so the Advanced button survives in-tab navigations on X.
+
 ## 0.5.5
 
 - Broaden search box detection for X profile pages and localized search inputs.

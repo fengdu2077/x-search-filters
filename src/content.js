@@ -272,24 +272,28 @@
     installRouteWatcher();
     scan(document);
 
+    // Re-scan on any DOM mutation that could create/destroy a search input.
+    // We debounce with a single rAF + short timer so bursts of mutations only
+    // cost one scan, and we ALWAYS scan (not just on direct search-box hits),
+    // because X often rebuilds the search box asynchronously inside a freshly
+    // inserted container — which the previous "direct match" check missed,
+    // causing the Advanced button to vanish after a few in-tab navigations.
+    let scanQueued = false;
+    function queueScan() {
+      if (scanQueued) return;
+      scanQueued = true;
+      requestAnimationFrame(() => {
+        scanQueued = false;
+        scan(document);
+      });
+    }
     const obs = new MutationObserver((mutations) => {
-      let shouldScan = false;
-      let shouldCleanup = false;
+      let relevant = false;
       for (const m of mutations) {
-        for (const n of m.addedNodes || []) {
-          if (!(n instanceof Element)) continue;
-          if (n.matches && n.matches(SEARCH_INPUT_SELECTOR)) { shouldScan = true; break; }
-          if (n.querySelector && n.querySelector(SEARCH_INPUT_SELECTOR)) { shouldScan = true; break; }
-        }
-        for (const n of m.removedNodes || []) {
-          if (!(n instanceof Element)) continue;
-          if (n.matches && n.matches(SEARCH_INPUT_SELECTOR)) { shouldCleanup = true; break; }
-          if (n.querySelector && n.querySelector(SEARCH_INPUT_SELECTOR)) { shouldCleanup = true; break; }
-        }
-        if (shouldScan || shouldCleanup) break;
+        if (m.addedNodes && m.addedNodes.length) { relevant = true; break; }
+        if (m.removedNodes && m.removedNodes.length) { relevant = true; break; }
       }
-      if (shouldScan) scan(document);
-      else if (shouldCleanup) removeOrphanTriggers();
+      if (relevant) queueScan();
     });
     obs.observe(document.body, { childList: true, subtree: true });
 

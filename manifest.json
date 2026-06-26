@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "X Search Filters",
-  "version": "0.5.5",
-  "description": "Visual filter panel for X (Twitter) advanced search operators. Click the search box to open; supports history, favorites, and EN/ZH UI.",
+  "version": "0.5.7",
+  "description": "Visual filters for X advanced search operators, with history, favorites, and EN/ZH UI.",
   "icons": {
     "16": "icons/icon-16.png",
     "48": "icons/icon-48.png",

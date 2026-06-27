@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.8
+## 0.6.0
 
 - Fix the Advanced button becoming unresponsive after a search or language
   switch. The trigger button is now a singleton that survives X rebuilding the

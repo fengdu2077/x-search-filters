@@ -158,21 +158,10 @@
     if (s.filterHasEngagement === 'on')      out.push('filter:has_engagement');
     if (s.filterHasEngagement === 'exclude') out.push('-filter:has_engagement');
 
-    // 9. Media filters
-    const mediaBools = [
-      ['filterMedia',          'filter:media'],
-      ['filterImages',         'filter:images'],
-      ['filterVideos',         'filter:videos'],
-      ['filterTwimg',          'filter:twimg'],
-      ['filterNativeVideo',    'filter:native_video'],
-      ['filterSpaces',         'filter:spaces'],
-      ['filterLinks',          'filter:links'],
-      ['filterNews',           'filter:news'],
-      ['filterNativeRetweets', 'filter:nativeretweets']
-    ];
-    for (const [k, op] of mediaBools) {
-      if (s[k] === 'on') out.push(op);
-    }
+    // 9. Media filters — radioMedia is a mutually-exclusive group:
+    // '' (off) | 'media' | 'images' | 'videos'. At most one filter is emitted.
+    const mediaOp = { media: 'filter:media', images: 'filter:images', videos: 'filter:videos' }[s.radioMedia];
+    if (mediaOp) out.push(mediaOp);
     if (s.filterReplies === 'on') out.push('-filter:replies');
 
     // 10. Language & location

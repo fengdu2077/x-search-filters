@@ -60,7 +60,6 @@
     let searchInput = null;
     let state = {};
     let lastBuilt = '';
-    let lastAppliedQuery = '';
     let visible = false;
 
     /* --- Field lookup (build a map by key once) --- */
@@ -206,6 +205,35 @@
           }
           return tri;
         }
+        case 'radioMedia': {
+          // Mutually-exclusive media group: '' (off/any) | media | images | videos.
+          // Picking an option clears the others; clicking the active one again
+          // clears it back to '' (off) so the user can drop the filter entirely.
+          const wrap = el('div', { class: 'xsf-radio' });
+          const opts = [
+            { v: 'media',  labelKey: 'filterMedia' },
+            { v: 'images', labelKey: 'filterImages' },
+            { v: 'videos', labelKey: 'filterVideos' }
+          ];
+          const cur = state[key] || '';
+          for (const o of opts) {
+            const active = cur === o.v;
+            const b = el('button', {
+              type: 'button',
+              class: 'xsf-chip',
+              'aria-pressed': active ? 'true' : 'false',
+              onclick: () => {
+                state[key] = active ? '' : o.v;
+                wrap.querySelectorAll('button').forEach((bb) => {
+                  bb.setAttribute('aria-pressed', bb === b && !active ? 'true' : 'false');
+                });
+                sync();
+              }
+            }, i18n.t(lang, 'labels.' + o.labelKey));
+            wrap.appendChild(b);
+          }
+          return wrap;
+        }
       }
       return el('span');
     }
@@ -332,10 +360,9 @@
     }
     function tabType() {
       const w = el('div');
-      w.appendChild(chipGroup([
-        'filterMedia', 'filterImages', 'filterVideos', 'filterLinks',
-        'filterQuote', 'filterReplies'
-      ]));
+      // Media is a single-row mutually-exclusive group (any / images / videos).
+      w.appendChild(fieldBlock('radioMedia'));
+      w.appendChild(chipGroup(['filterLinks', 'filterQuote', 'filterReplies']));
       return w;
     }
 
@@ -349,6 +376,17 @@
     /* ──────────────────────────────────────────────────────────
      *  History / Favorites lists
      * ────────────────────────────────────────────────────────── */
+
+    /* Format a ms timestamp as local YYYY-MM-DD HH:MM. Same shape for EN/ZH. */
+    function formatTime(ts) {
+      if (!ts) return '';
+      const d = new Date(ts);
+      if (Number.isNaN(d.getTime())) return '';
+      const p = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+             `${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
     async function renderHistoryView() {
       const wrap = el('div');
       const list = await storage.getHistory();
@@ -359,13 +397,14 @@
       const ul = el('ul', { class: 'xsf-list' });
       for (const item of list) {
         ul.appendChild(el('li', { class: 'xsf-list-item' },
-          el('div', { class: 'xsf-list-text' },
-            el('div', { class: 'xsf-list-query' }, item.query)
-          ),
-          el('button', {
-            class: 'xsf-btn', type: 'button',
-            onclick: () => applyRawQuery(item.query)
-          }, i18n.t(lang, 'use'))
+          el('div', { class: 'xsf-list-query' }, item.query),
+          el('div', { class: 'xsf-list-meta' },
+            el('div', { class: 'xsf-list-time' }, formatTime(item.ts)),
+            el('button', {
+              class: 'xsf-btn', type: 'button',
+              onclick: () => applyRawQuery(item.query)
+            }, i18n.t(lang, 'use'))
+          )
         ));
       }
       wrap.appendChild(ul);
@@ -382,21 +421,21 @@
       const ul = el('ul', { class: 'xsf-list' });
       for (const item of list) {
         ul.appendChild(el('li', { class: 'xsf-list-item' },
-          el('div', { class: 'xsf-list-text' },
-            el('div', { class: 'xsf-list-name' }, item.name),
-            el('div', { class: 'xsf-list-query' }, item.query)
-          ),
-          el('button', {
-            class: 'xsf-btn', type: 'button',
-            onclick: () => applyRawQuery(item.query)
-          }, i18n.t(lang, 'use')),
-          el('button', {
-            class: 'xsf-btn', type: 'button',
-            onclick: async () => {
-              await storage.removeFavorite(item.id);
-              redraw();
-            }
-          }, i18n.t(lang, 'remove'))
+          el('div', { class: 'xsf-list-name' }, item.name),
+          el('div', { class: 'xsf-list-query' }, item.query),
+          el('div', { class: 'xsf-list-actions' },
+            el('button', {
+              class: 'xsf-btn', type: 'button',
+              onclick: () => applyRawQuery(item.query)
+            }, i18n.t(lang, 'use')),
+            el('button', {
+              class: 'xsf-btn', type: 'button',
+              onclick: async () => {
+                await storage.removeFavorite(item.id);
+                redraw();
+              }
+            }, i18n.t(lang, 'remove'))
+          )
         ));
       }
       wrap.appendChild(ul);
@@ -480,7 +519,6 @@
     resetBtn.addEventListener('click', () => {
       state = {};
       kwInput.value = '';
-      lastAppliedQuery = '';
       if (searchInput && searchInput.isConnected) {
         reactInput.setValue(searchInput, '');
       }
@@ -520,7 +558,6 @@
      * (the only time we touch it), record history, submit, close. */
     async function doApply() {
       const finalQuery = lastBuilt;
-      lastAppliedQuery = finalQuery;
       if (searchInput && searchInput.isConnected) {
         // X's search box is React-controlled. Clearing first prevents React's
         // previous internal value from being reconciled back into the input and
@@ -622,10 +659,18 @@
 
     /* --- Positioning --- */
     function reposition() {
-      if (!searchInput || !searchInput.isConnected) return;
-      const r = searchInput.getBoundingClientRect();
       const w = 440;
       const h = 412;
+      // No usable search box (e.g. X tore it down, or the panel was opened
+      // without one) → center on screen so it's always visible instead of
+      // silently returning and leaving the panel wherever its last coords
+      // were (often off-screen, which read as "click did nothing").
+      if (!searchInput || !searchInput.isConnected) {
+        root.style.left = Math.max(8, (window.innerWidth - w) / 2) + 'px';
+        root.style.top = Math.max(8, (window.innerHeight - h) / 2) + 'px';
+        return;
+      }
+      const r = searchInput.getBoundingClientRect();
       const left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left));
       // Prefer below; flip above if there isn't room
       let top = r.bottom + 6;
@@ -641,17 +686,13 @@
       searchInput = inputEl;
       if (!host.isConnected) document.body.appendChild(host);
       visible = true;
-      // Prefill rules:
-      // - If the bar still contains the query this panel just applied, do NOT
-      //   import it back into Keywords. The existing structured state already
-      //   represents that query; importing the full query as Keywords would
-      //   duplicate every selected filter.
-      // - If the user typed a different plain query into X's search bar, start
-      //   a fresh advanced-search state and use that text as Keywords.
-      const barVal = ((searchInput && searchInput.value) || '').trim();
-      if (barVal !== lastAppliedQuery) {
-        state = { keywords: barVal };
-      }
+      // The panel is the source of truth, not the search bar. We keep the
+      // last structured state (from/user, dates, min_faves, …) so the user
+      // can reopen the panel and keep tweaking. We deliberately do NOT read
+      // the search bar back into the panel: importing whatever X left in the
+      // bar (which X may rewrite after a submit) used to pile the previous
+      // query on top of the existing filters on every reopen, snowballing.
+      // To start fresh, the user clicks Reset.
       root.setAttribute('data-theme', detectTheme());
       redraw();
       reposition();

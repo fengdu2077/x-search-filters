@@ -90,6 +90,9 @@
 
   const NS = (window.XSF = window.XSF || {});
   NS.storage = {
+    KEY_HISTORY,
+    KEY_FAVORITES,
+    KEY_LANG,
     HISTORY_MAX,
     FAVORITES_SOFT_MAX,
     getHistory,

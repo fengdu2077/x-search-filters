@@ -65,9 +65,11 @@
     { key: 'minReplies',  category: 'filters', type: 'number', labelKey: 'minReplies' },
 
     // --- TYPE: media/content type ---
-    { key: 'filterMedia',   category: 'type', type: 'bool', labelKey: 'filterMedia' },
-    { key: 'filterImages',  category: 'type', type: 'bool', labelKey: 'filterImages' },
-    { key: 'filterVideos',  category: 'type', type: 'bool', labelKey: 'filterVideos' },
+    // filterMedia (any media), filterImages, filterVideos are mutually
+    // exclusive on X (image-only and video-only can't coexist, and "any
+    // media" is the superset). Exposed as a single radio field whose value
+    // is '' (any/off) | 'media' | 'images' | 'videos'.
+    { key: 'radioMedia', category: 'type', type: 'radioMedia', labelKey: 'mediaGroup' },
     { key: 'filterLinks',   category: 'type', type: 'bool', labelKey: 'filterLinks' },
     { key: 'filterQuote',   category: 'type', type: 'bool', labelKey: 'filterQuote' },
     { key: 'filterReplies', category: 'type', type: 'bool', labelKey: 'excludeReplies' }

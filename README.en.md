@@ -26,15 +26,7 @@ A lightweight Chrome extension that adds a visual advanced-search panel to X (Tw
 6. Select the unzipped project folder — the folder that directly contains `manifest.json`.
 7. Open `https://x.com` and use the **Advanced / 高级搜索** button inside the search bar.
 
-## Local development install
-
-If you are developing locally, load this folder directly:
-
-```text
-F:\feng\x\x-search-filters
-```
-
-Chrome must be pointed at the folder containing `manifest.json`.
+> **Avoid installing twice:** if you have already installed this extension from the Chrome Web Store, do not also load the GitHub version (and vice versa). Running two copies of the same extension at once can make the **Advanced** button stop responding after certain actions. Keep only one installed.
 
 ## Usage
 
@@ -104,11 +96,9 @@ After editing files, reload the extension:
 
 ## Project notes
 
-- This project is currently in a trial and iteration stage, and is not published on the Chrome Web Store yet.
-- It is distributed through GitHub for now. Users can install it with Chrome Developer Mode as an unpacked extension.
-- I have not registered a Google Chrome Web Store developer account yet. If more people use this extension, I will consider publishing it on the Chrome Web Store.
-- This extension depends on the search-box DOM on X. If X changes its page structure, button detection or some interactions may break.
-- If you run into issues, please open an issue. Pull requests / merge requests are also welcome.
+- This extension is distributed via GitHub and can be loaded as an unpacked extension in Chrome Developer Mode.
+- It depends on the search-box DOM on X. If X changes its page structure, button detection or some interactions may break.
+- If you run into issues, please open an issue. Pull requests are also welcome.
 
 ## Disclaimer
 

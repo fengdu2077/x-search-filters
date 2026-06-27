@@ -26,7 +26,22 @@
   let panelApi = null;
   let cssText = '';
   let lang = 'en';                         // mirrors panel's language for tooltip
-  const triggerByInput = new WeakMap();    // input -> button element
+
+  /* ───── Singleton trigger button ────────────────────────────────────
+   * X rebuilds the search box on every SPA navigation, so the trigger
+   * button's lifetime must NOT be tied to one input instance. We keep a
+   * single persistent button: on each scan we just reposition it next to
+   * the current search box, never destroying/recreating it. This kills the
+   * click-swallowing race where the button was removed between pointerdown
+   * and pointerup (especially when two copies of the extension are
+   * installed and each was tearing down the other's button). */
+  let triggerBtn = null;
+
+  /* Per-instance namespace so this copy only ever sees its OWN trigger
+   * button. Without it, two installed copies each ran a MutationObserver
+   * that treated the other copy's button as an orphan and deleted it. */
+  const TRIGGER_ID = 'xsf-trigger-' + Math.floor(performance.now() * 1e9).toString(36);
+  const TRIGGER_SELECTOR = `button[id="${TRIGGER_ID}"]`;
 
   function getI18n() {
     try { return NS.i18n; } catch (_) { return null; }
@@ -36,24 +51,65 @@
     return lang === 'zh' ? '高级搜索' : 'Advanced';
   }
 
+  /* Update the trigger button's label + tooltip to match the current language.
+   * Called when the language changes (storage listener) so the button flips
+   * from Advanced ⇄ 高级搜索 without a page reload. */
+  function refreshTriggerText() {
+    const btn = triggerBtn;
+    if (!btn || !btn.isConnected) return;
+    btn.textContent = getTriggerText();
+    const i18n = getI18n();
+    if (i18n) btn.title = i18n.t(lang, 'triggerTip') || '';
+  }
+
+  /* Detect X's light/dark theme by sampling the body background luminance.
+   * Used to pick an opaque button background that overlays long search text
+   * cleanly in either theme. */
+  function isDarkTheme() {
+    const bg = getComputedStyle(document.body).backgroundColor || '';
+    const m = bg.match(/\d+/g);
+    if (!m) return false;
+    const lum = 0.2126 * +m[0] + 0.7152 * +m[1] + 0.0722 * +m[2];
+    return lum < 128;
+  }
+
   /* ───── Trigger button: inject & position ─────────────────────────── */
 
-  function buildTriggerButton(input) {
+  /* Find the currently visible/usable search input on the page, in document
+   * order. Used at click time and at scan time — we never cache an input
+   * reference across SPA navigations, because X replaces the element. */
+  function findUsableSearchInput() {
+    const inputs = document.querySelectorAll(SEARCH_INPUT_SELECTOR);
+    for (const input of inputs) {
+      if (isUsableSearchInput(input)) return input;
+    }
+    return null;
+  }
+
+  function buildTriggerButton() {
     const btn = document.createElement('button');
-    btn.__xsfInput = input;
     btn.type = 'button';
     btn.setAttribute('aria-label', 'X Search Filters');
-    btn.id = 'xsf-trigger-' + Math.floor(performance.now() * 1000).toString(36);
+    btn.id = TRIGGER_ID;
+    // Pick an opaque-ish background that matches the page theme, so the
+    // button cleanly OVERLAYS long search text instead of letting the text
+    // show through. The user's long input is left intact (no truncation);
+    // the button simply sits on top of whatever text it covers.
+    const dark = isDarkTheme();
+    const idleBg   = dark ? 'rgba(21,32,43,0.92)' : 'rgba(255,255,255,0.92)';
+    const hoverBg  = dark ? 'rgba(29,155,240,0.92)' : 'rgba(29,155,240,0.95)';
+    const idleFg   = dark ? '#e7e9ea' : '#0f1419';
+    const borderColor = 'rgba(29,155,240,0.45)';
     btn.style.cssText = [
       'position:fixed',
       'width:auto',
       'height:26px',
       'border-radius:999px',
-      'border:1px solid rgba(29,155,240,0.35)',
-      'background:rgba(29,155,240,0.10)',
-      'color:#1d9bf0',
+      `border:1px solid ${borderColor}`,
+      `background:${idleBg}`,
+      `color:${idleFg}`,
       'cursor:pointer',
-      'display:inline-flex',
+      'display:none',
       'align-items:center',
       'justify-content:center',
       'font-size:12px',
@@ -62,27 +118,29 @@
       'padding:0 9px',
       'z-index:2147483645',
       'box-shadow:0 1px 4px rgba(0,0,0,0.12)',
-      'transition:background 0.15s ease',
-      'font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif'
+      'transition:background 0.15s ease, color 0.15s ease',
+      'font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif',
+      '-webkit-backdrop-filter:blur(4px)',
+      'backdrop-filter:blur(4px)'
     ].join(';');
     btn.textContent = getTriggerText();
-    const idleBg = 'rgba(29,155,240,0.10)';
-    const hoverBg = 'rgba(29,155,240,0.18)';
-    btn.addEventListener('mouseenter', () => { btn.style.background = hoverBg; });
-    btn.addEventListener('mouseleave', () => { btn.style.background = idleBg; });
-    // Adapt border contrast to dark theme by sampling body bg.
-    const bg = getComputedStyle(document.body).backgroundColor || '';
-    const m = bg.match(/\d+/g);
-    if (m && (0.2126 * +m[0] + 0.7152 * +m[1] + 0.0722 * +m[2]) < 128) {
-      btn.style.borderColor = 'rgba(29,155,240,0.45)';
-    }
-    // Tooltip
-    const i18n = getI18n();
-    if (i18n) btn.title = i18n.t(lang, 'triggerTip') || '';
+    const hoverFg = '#ffffff';
+    btn.addEventListener('mouseenter', () => {
+      btn.style.background = hoverBg;
+      btn.style.color = hoverFg;
+    });
+    btn.addEventListener('mouseleave', () => {
+      btn.style.background = idleBg;
+      btn.style.color = idleFg;
+    });
+    // Click resolves the search box LIVE. The button is a singleton that
+    // survives across SPA navigations, so we must not trust any input
+    // reference captured at build time — it may belong to a box X already
+    // torn down. resolveInput() re-queries the DOM on every click.
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      openPanelFor(input);
+      openPanelFor(findUsableSearchInput());
     });
     // Don't let pointerdown on this button propagate to the outside-close handler
     btn.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -112,9 +170,15 @@
     return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
   }
 
-  function positionTrigger(btn, input) {
+  /* Reposition the singleton button next to `input`. If `input` is gone
+   * or unusable, hide the button instead of removing it — removing it was
+   * what created the click race, and the button is reused for the next
+   * search box anyway. */
+  function positionTrigger(input) {
+    const btn = triggerBtn;
+    if (!btn || !btn.isConnected) return;
     if (!isUsableSearchInput(input)) {
-      btn.remove();
+      btn.style.display = 'none';
       return;
     }
     const r = input.getBoundingClientRect();
@@ -134,34 +198,26 @@
     btn.style.top = top + 'px';
   }
 
-  function ensureTrigger(input) {
-    if (!isUsableSearchInput(input)) return;
-    let btn = triggerByInput.get(input);
-    if (!btn || !btn.isConnected) {
-      btn = buildTriggerButton(input);
-      document.body.appendChild(btn);
-      triggerByInput.set(input, btn);
+  /* Ensure the singleton button exists, then snap it to the current search
+   * box (if any). Called from scan() and bindInput(). */
+  function ensureTrigger() {
+    if (!triggerBtn || !triggerBtn.isConnected) {
+      triggerBtn = buildTriggerButton();
+      document.body.appendChild(triggerBtn);
     }
-    positionTrigger(btn, input);
+    positionTrigger(findUsableSearchInput());
   }
 
   function repositionAllTriggers() {
-    document.querySelectorAll(SEARCH_INPUT_SELECTOR).forEach((input) => {
-      const btn = triggerByInput.get(input);
-      if (btn) positionTrigger(btn, input);
-    });
-    removeOrphanTriggers();
+    positionTrigger(findUsableSearchInput());
   }
 
+  /* With a singleton + per-instance id, orphan cleanup collapses to: if our
+   * button somehow left the DOM, drop the stale reference. We never touch
+   * buttons owned by another copy of the extension — the TRIGGER_ID
+   * namespace guarantees they're invisible to this selector. */
   function removeOrphanTriggers() {
-    document.querySelectorAll('button[id^="xsf-trigger-"]').forEach((btn) => {
-      const input = btn.__xsfInput;
-      // Drop the button if its owning input was removed, hidden by SPA route
-      // transition, or replaced by a new search input instance.
-      if (!isUsableSearchInput(input) || triggerByInput.get(input) !== btn) {
-        btn.remove();
-      }
-    });
+    if (triggerBtn && !triggerBtn.isConnected) triggerBtn = null;
   }
 
   /* ───── Search-input bindings ─────────────────────────────────────── */
@@ -174,7 +230,7 @@
       boundInputs.add(input);
       input.addEventListener('keydown', onInputKeyDown);
     }
-    ensureTrigger(input);
+    ensureTrigger();
   }
 
   function onInputKeyDown(e) {
@@ -300,6 +356,22 @@
     // Trigger buttons follow the input on scroll / resize.
     window.addEventListener('scroll', repositionAllTriggers, true);
     window.addEventListener('resize', repositionAllTriggers);
+
+    // Keep the trigger button's label in sync with the UI language the user
+    // picks in the panel. The panel writes the new language to storage; we
+    // listen here so the Advanced ⇄ 高级搜索 swap happens live, no reload.
+    if (chrome.storage && chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area !== 'local') return;
+        const c = changes[NS.storage && NS.storage.KEY_LANG];
+        if (!c) return;
+        const next = c.newValue;
+        if (next === 'en' || next === 'zh') {
+          lang = next;
+          refreshTriggerText();
+        }
+      });
+    }
   }
 
   if (document.readyState === 'loading') {

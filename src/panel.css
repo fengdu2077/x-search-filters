@@ -252,6 +252,12 @@
   flex-wrap: wrap;
   gap: 4px;
 }
+/* Mutually-exclusive radio group (reuses .xsf-chip buttons) */
+.xsf-radio {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
 .xsf-chip {
   border: 1px solid var(--xsf-input-border);
   background: var(--xsf-chip-bg);
@@ -398,12 +404,16 @@
   border: 1px solid var(--xsf-border);
   border-radius: 8px;
   margin-bottom: 6px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
-.xsf-list-text { flex: 1 1 auto; min-width: 0; }
-.xsf-list-name { font-weight: 600; font-size: 12px; }
+.xsf-list-name {
+  font-weight: 600;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Query row: spans the full width so long queries get a clean ellipsis
+ * without being squeezed by the timestamp or action buttons. */
 .xsf-list-query {
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 11px;
@@ -411,6 +421,27 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Meta row: timestamp (history) or spacer (favorites) left, action
+ * buttons right. */
+.xsf-list-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+.xsf-list-time {
+  font-size: 10px;
+  color: var(--xsf-muted);
+  opacity: 0.8;
+}
+.xsf-list-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-top: 4px;
+  margin-left: auto;
 }
 .xsf-empty {
   color: var(--xsf-muted);
